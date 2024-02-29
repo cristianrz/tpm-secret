@@ -32,11 +32,11 @@ cp tpm-secret-* /usr/local/bin
   correct PIN. It attaches the encrypted secret file and outputs the decrypted
   secret to stdout.
 
-Note: The tpm-secret-get script is meant to be piped to other programs for
-further processing.
 
 ## Important Notes
 
+- The tpm-secret-get script is meant to be piped to other programs for further
+  processing and will refuse to output to the terminal.
 - Ensure that your system has a TPM installed and enabled.
 - Backup the recovery key and store it securely in case it is needed for
   recovery purposes.

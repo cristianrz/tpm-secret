@@ -16,7 +16,8 @@ git clone https://github.com/cristianrz/tpm-secret.git
 Copy the scripts to your preferred location
 
 ```bash
-cd tpm-secret cp tpm-secret-* /usr/local/bin
+cd tpm-secret
+cp tpm-secret-* /usr/local/bin
 ```
 
 ## Usage

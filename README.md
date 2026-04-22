@@ -1,55 +1,89 @@
-# tpm-secret 
+# tpm-secret
 
-This project provides a set of shell scripts for managing secrets securely with
-a Trusted Platform Module (TPM) in a Linux environment. The scripts utilize
-LUKS (Linux Unified Key Setup) encryption and systemd-cryptsetup for handling
-encryption operations.
+Store secrets in a LUKS volume unlocked by your TPM2 chip.
+
+The secret can only be retrieved on **this specific machine** with **Secure Boot
+intact** and the correct **PIN**. Unlike password managers or encrypted files,
+there is no master password to steal — the hardware is the key.
+
+Useful for:
+- Unlocking LUKS disks without typing a passphrase on boot
+- Storing SSH key passphrases that auto-fill only on trusted hardware
+- Keeping API keys and tokens on a homelab server without storing them in plaintext
+
+## How it works
+
+`tpm-secret` creates a 32MB LUKS container at `/var/secret.enc`. The container
+is enrolled with:
+
+- **TPM2 + PCR7** — binds the secret to this machine and Secure Boot state. If
+  the firmware or boot chain changes, the TPM will refuse to unlock.
+- **PIN** — a second factor so physical access alone is not enough.
+- **Recovery key** — a backup printed once at setup time. Store it somewhere safe.
+
+The original password used during LUKS format is wiped immediately, leaving only
+the TPM slot and the recovery key.
+
+## Dependencies
+
+- `cryptsetup`
+- `systemd-cryptenroll` (systemd ≥ 248)
+- A TPM2 chip with Secure Boot enabled
 
 ## Installation
 
-Clone this repository to your local machine:
-
-```bash
+```sh
 git clone https://github.com/cristianrz/tpm-secret.git
-```
-
-Copy the scripts to your preferred location
-
-```bash
 cd tpm-secret
-cp tpm-secret-* /usr/local/bin
+sudo cp tpm-secret-* /usr/local/bin/
 ```
 
 ## Usage
 
-- `tpm-secret-make`: This script sets up the encrypted secret file. It prompts
-  the user to enter a password and a PIN for unlocking the secret. The password
-  is subsequently removed, leaving only the recovery key stored in the TPM.
-- `tpm-secret-set`: This script sets a new secret from stdin. It attaches the
-  encrypted secret file and prompts the user to provide a key to store. The
-  provided key is then encrypted and stored securely.
-- `tpm-secret-get`: This script outputs the stored secret after introducing the
-  correct PIN. It attaches the encrypted secret file and outputs the decrypted
-  secret to stdout.
+### 1. Set up the secret store (once)
 
-
-## Important Notes
-
-- The tpm-secret-get script is meant to be piped to other programs for further
-  processing and will refuse to output to the terminal.
-- Ensure that your system has a TPM installed and enabled.
-- Backup the recovery key and store it securely in case it is needed for
-  recovery purposes.
-- These scripts require root privileges to perform encryption and decryption
-  operations, but `tpm-secret-get` should be fairly safe to add to the sudoers
-  file, e.g.:
-
-```txt
-<your username> ALL=(ALL) NOPASSWD: /usr/local/bin/get-secret
+```sh
+sudo tpm-secret-make
 ```
+
+This creates `/var/secret.enc`, enrolls your TPM and PIN, and prints a recovery
+key. Store the recovery key somewhere safe — it is the only way to access the
+secret if the TPM seal breaks (e.g. after a firmware update).
+
+### 2. Store a secret
+
+```sh
+echo "my-api-key" | sudo tpm-secret-set
+# or interactively:
+sudo tpm-secret-set
+```
+
+### 3. Retrieve the secret
+
+`tpm-secret-get` refuses to output to a terminal — it is designed to be piped
+directly into another program to prevent accidental exposure in logs or on screen.
+
+```sh
+sudo tpm-secret-get | your-program --password-stdin
+
+# Example: unlock an SSH key
+sudo tpm-secret-get | ssh-add -
+```
+
+You can add it to sudoers so it can be called without a password:
+
+```
+your-username ALL=(ALL) NOPASSWD: /usr/local/bin/tpm-secret-get
+```
+
+## Security notes
+
+- The secret is hardware-bound: it will not unlock on a different machine or
+  if Secure Boot is disabled or the boot chain is modified.
+- If a firmware update breaks the TPM seal, use the recovery key to regain
+  access and re-enroll with `tpm-secret-make`.
+- `tpm-secret-get` requires root by default. Scope sudoers access carefully.
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file
-for details.
-
+MIT
